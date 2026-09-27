@@ -7,12 +7,13 @@
 # MAGIC | # | Transformação | Por quê | Impacto |
 # MAGIC |---|---|---|---|
 # MAGIC | T1 | `trim` + maiúsculas + remoção de acentos nos textos | Evitar que "São Paulo" e "SAO PAULO" virem categorias diferentes (inclusive por arquivos com codificações distintas) | Categorias únicas e comparáveis |
+# MAGIC | T1b | Unidade `R$ / m³` → `R$ / m3` | A Bronze tem duas grafias para o GNV (8.732 × 17.945 registros) | Uma única unidade por produto |
 # MAGIC | T2 | CNPJ e CEP apenas com dígitos | Padronizar a chave do posto e o CEP | CNPJ com 14 dígitos; CEP com 8 |
 # MAGIC | T3 | `data_coleta` de texto `dd/mm/aaaa` para DATE (`try_to_timestamp`) | Permitir filtros e agregações temporais | Datas inválidas viram nulo e são rejeitadas |
 # MAGIC | T4 | `valor_venda` e `valor_compra`: vírgula → ponto e `try_cast` para DECIMAL(10,3) | O CSV usa vírgula decimal; DECIMAL evita erro de arredondamento de ponto flutuante | Preços numéricos e somáveis |
 # MAGIC | T5 | Regras de validade (campos obrigatórios, preço entre R$ 0,50 e R$ 20,00) | Registros sem data, preço ou posto não respondem às perguntas; preços fora da faixa são erro de digitação | Registros inválidos vão para `silver.precos_revenda_rejeitados`, com o motivo |
 # MAGIC | T6 | Deduplicação pela chave de negócio (posto + produto + data) | Um posto tem um único preço por produto em cada coleta | Remove repetições, mantendo a última ingestão |
-# MAGIC | T7 | Sinalização de outliers (IQR por produto e mês): `fl_outlier_iqr` | Valores extremos distorcem médias; **sinalizar em vez de apagar** preserva a rastreabilidade | As análises podem excluí-los com um filtro |
+# MAGIC | T7 | Sinalização de outliers (IQR por produto, UF e mês): `fl_outlier_iqr` | Valores extremos distorcem médias; **sinalizar em vez de apagar** preserva a rastreabilidade | As análises podem excluí-los com um filtro |
 # MAGIC | T8 | Remoção de colunas sem uso analítico (`nome_rua`, `numero_rua`, `complemento`) | Minimização de dados: não respondem a nenhuma pergunta | Tabela mais enxuta |
 
 # COMMAND ----------
@@ -50,7 +51,7 @@ padronizado = bronze.select(
     texto_padrao("bairro").alias("bairro"),
     F.regexp_replace("cep", r"\D", "").alias("cep"),                          # T2
     F.regexp_replace(texto_padrao("produto"), r"\s+", " ").alias("produto"),
-    F.trim("unidade_medida").alias("unidade_medida"),
+    F.regexp_replace(F.trim("unidade_medida"), "m³", "m3").alias("unidade_medida"),  # T1b: unifica R$ / m³ e R$ / m3
     texto_padrao("bandeira").alias("bandeira"),
     F.expr("CAST(try_to_timestamp(trim(data_coleta), 'dd/MM/yyyy') AS DATE)").alias("data_coleta"),  # T3
     numero_br("valor_venda").alias("valor_venda"),                            # T4
@@ -102,23 +103,25 @@ deduplicado = (
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## T7 · Sinalização de outliers (IQR por produto e mês)
+# MAGIC ## T7 · Sinalização de outliers (IQR por produto, UF e mês)
+# MAGIC O IQR é calculado **dentro de cada UF**: um preço alto no Acre é comparado com outros postos do Acre, e não com a média nacional. Assim, preços legitimamente altos de regiões remotas não são marcados como outliers, o que evita distorcer a P2.
 
 # COMMAND ----------
 
 com_mes = deduplicado.withColumn("_ano_mes", F.date_format("data_coleta", "yyyy-MM"))
 limites = (
-    com_mes.groupBy("produto", "_ano_mes")
+    com_mes.groupBy("produto", "uf_sigla", "_ano_mes")
     .agg(F.expr("percentile_approx(valor_venda, array(0.25, 0.75))").alias("q"))
     .select(
         "produto",
+        "uf_sigla",
         "_ano_mes",
         (F.col("q")[0] - 1.5 * (F.col("q")[1] - F.col("q")[0])).alias("_lim_inf"),
         (F.col("q")[1] + 1.5 * (F.col("q")[1] - F.col("q")[0])).alias("_lim_sup"),
     )
 )
 silver = (
-    com_mes.join(limites, ["produto", "_ano_mes"], "left")
+    com_mes.join(limites, ["produto", "uf_sigla", "_ano_mes"], "left")
     .withColumn(
         "fl_outlier_iqr",
         (F.col("valor_venda") < F.col("_lim_inf")) | (F.col("valor_venda") > F.col("_lim_sup")),
@@ -182,7 +185,7 @@ COLUNAS_SILVER = {
     "data_coleta": "Data da coleta do preco. DATE. Dominio: 2025-01-01 a 2026-06-30. Linhagem: bronze.data_coleta dd/mm/aaaa convertida (T3).",
     "valor_venda": "Preco ao consumidor em R$. DECIMAL(10,3). Dominio: 0,50 a 20,00. Linhagem: bronze.valor_venda, virgula para ponto e try_cast (T4, T5).",
     "valor_compra": "Preco de distribuicao em R$. DECIMAL(10,3). Esperado nulo: serie descontinuada pela ANP em ago/2020. Linhagem: bronze.valor_compra (T4).",
-    "fl_outlier_iqr": "Indica preco fora de Q1-1,5*IQR e Q3+1,5*IQR do produto no mes. BOOLEAN. Calculado na Silver (T7).",
+    "fl_outlier_iqr": "Indica preco fora de Q1-1,5*IQR e Q3+1,5*IQR do produto na UF e no mes. BOOLEAN. Calculado na Silver (T7).",
     "_arquivo_origem": "Arquivo CSV de origem. STRING. Linhagem: bronze._arquivo_origem.",
     "_data_ingestao": "Data e hora da ingestao na Bronze. TIMESTAMP. Linhagem: bronze._data_ingestao.",
 }

@@ -12,6 +12,7 @@
 # MAGIC | P4 | Postos bandeirados cobram mais que postos de bandeira branca? Quanto, por produto? | Núcleo |
 # MAGIC | P5 | Em quais capitais a dispersão de preços da gasolina entre postos é maior? | Fronteira |
 # MAGIC | P6 | É possível estimar a margem bruta da revenda (venda − compra)? | Fronteira |
+# MAGIC | P7 | Quais UFs sofreram a maior alta no choque de mar-abr/2026? | Adicionada na análise (a partir da P1) |
 # MAGIC
 # MAGIC As consultas usam a camada **Gold**. Registros sinalizados como outlier (`fl_outlier_iqr`) são excluídos. Nos gráficos, use o botão **+ → Visualization** sob cada resultado.
 
@@ -269,3 +270,29 @@
 # MAGIC        COUNT(valor_compra) AS registros_com_valor_compra,
 # MAGIC        ROUND(100 * COUNT(valor_compra) / COUNT(*), 2) AS pct_preenchido
 # MAGIC FROM silver.precos_revenda
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## P7 · Alta de preços por UF no choque de mar-abr/2026 (pergunta adicionada na análise)
+# MAGIC Surgiu do achado da P1. Compara o preço médio de fev/2026 (antes do choque) com abr/2026 (pico). Usa o nome completo da tabela (catálogo.schema.tabela) para funcionar mesmo após o reinício da sessão.
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC WITH m AS (
+# MAGIC   SELECT produto_analise, regiao_sigla, uf_sigla, ano_mes,
+# MAGIC          SUM(preco_medio * qtd_coletas) / SUM(qtd_coletas) AS p
+# MAGIC   FROM mvp_combustiveis.gold.agg_preco_mensal_uf
+# MAGIC   WHERE produto_analise IN ('DIESEL S10', 'GASOLINA COMUM')
+# MAGIC     AND ano_mes IN ('2026-02', '2026-04')
+# MAGIC   GROUP BY ALL
+# MAGIC )
+# MAGIC SELECT produto_analise, regiao_sigla, uf_sigla,
+# MAGIC        ROUND(MAX(CASE WHEN ano_mes = '2026-02' THEN p END), 3) AS preco_fev26,
+# MAGIC        ROUND(MAX(CASE WHEN ano_mes = '2026-04' THEN p END), 3) AS preco_abr26,
+# MAGIC        ROUND((MAX(CASE WHEN ano_mes = '2026-04' THEN p END)
+# MAGIC             / MAX(CASE WHEN ano_mes = '2026-02' THEN p END) - 1) * 100, 1) AS alta_pct
+# MAGIC FROM m
+# MAGIC GROUP BY produto_analise, regiao_sigla, uf_sigla
+# MAGIC ORDER BY produto_analise, alta_pct DESC

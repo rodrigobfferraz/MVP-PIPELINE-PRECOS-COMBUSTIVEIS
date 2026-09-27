@@ -270,7 +270,7 @@ documentar_tabela(TB["fato"], "Fato de precos de revenda. Grao: um preco de um p
     "sk_produto": "FK para dim_produto. INT. Obtida por produto.",
     "sk_posto": "FK para dim_posto. INT. Obtida por cnpj_revenda.",
     "valor_venda": "Preco ao consumidor em R$ por litro (ou m3 para GNV). DECIMAL(10,3). Dominio: 0,50 a 20,00. Linhagem: silver.valor_venda.",
-    "fl_outlier_iqr": "Indica preco atipico pela regra IQR (produto x mes). BOOLEAN. Linhagem: silver.fl_outlier_iqr.",
+    "fl_outlier_iqr": "Indica preco atipico pela regra IQR (produto x UF x mes). BOOLEAN. Linhagem: silver.fl_outlier_iqr.",
     "arquivo_origem": "Arquivo CSV de origem, para rastreabilidade. STRING. Linhagem: bronze._arquivo_origem.",
 })
 documentar_tabela(TB["agg"], "Agregado mensal de precos por UF e produto, excluindo outliers. Grao: ano_mes x uf_sigla x produto_analise. Origem: fato_preco_revenda com dim_tempo, dim_localidade e dim_produto.", {
