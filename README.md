@@ -93,7 +93,7 @@ As perguntas de **fronteira** foram incluídas de propósito: elas testam os lim
 
 - Os dados são **dados abertos governamentais**, publicados pela ANP no âmbito da Política de Dados Abertos do Poder Executivo Federal (**Decreto nº 8.777/2016**), com Plano de Dados Abertos próprio, e também listados no Portal Brasileiro de Dados Abertos (dados.gov.br).
 - Dados abertos governamentais podem ser **livremente acessados, utilizados, modificados e compartilhados**, inclusive para fins acadêmicos e comerciais, desde que **citada a fonte**. A fonte é citada neste documento e nos metadados das tabelas (`_fonte`).
-- ⏳ **Licença específica:** confirmar e transcrever aqui o campo "Licença" exibido na página do conjunto em dados.gov.br.
+- **Licença específica:** o portal dados.gov.br não exibe uma licença específica para este conjunto (consulta em 27/09/2026). O uso segue a Política de Dados Abertos do Poder Executivo Federal (Decreto nº 8.777/2016), que prevê a livre utilização dos dados abertos, com citação da fonte.
 - **LGPD:** os registros identificam **pessoas jurídicas** (postos revendedores, por CNPJ e razão social), e não pessoas físicas. Mesmo assim, por minimização, os campos de endereço detalhado (rua, número, complemento) foram descartados a partir da Silver.
 
 ---
